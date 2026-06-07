@@ -1,0 +1,33 @@
+<!-- plugins.xml -->
+<library path="wut_velma_effort_controller">
+  <class
+    name="wut_velma_effort_controller/WutVelmaEffortController"
+    type="wut_velma_effort_controller::WutVelmaEffortController"
+    base_class_type="controller_interface::ChainableControllerInterface"/>
+  <class
+    name="wut_velma_effort_controller/CartTorqueController"
+    type="wut_velma_effort_controller::CartTorqueController"
+    base_class_type="controller_interface::ChainableControllerInterface"/>
+  <class
+    name="cartesian_trajectory_generator/CartesianTrajectoryGenerator"
+    type="cartesian_trajectory_generator::CartesianTrajectoryGenerator"
+    base_class_type="controller_interface::ChainableControllerInterface">
+    <description>
+      Chainable Cartesian trajectory generator writing pose/twist/accel references to a downstream Cartesian torque controller.
+    </description>
+  </class>
+  <class
+    name="wut_velma_effort_controller/TestChainableController"
+    type="wut_velma_effort_controller::TestChainableController"
+    base_class_type="controller_interface::ChainableControllerInterface"/>
+</library>
+<!-- <library path="cartesian_trajectory_generator">
+  <class
+    name="cartesian_trajectory_generator/CartesianTrajectoryGenerator"
+    type="cartesian_trajectory_generator::CartesianTrajectoryGenerator"
+    base_class_type="controller_interface::ChainableControllerInterface">
+    <description>
+      Chainable Cartesian trajectory generator writing pose/twist/accel references to a downstream Cartesian torque controller.
+    </description>
+  </class>
+</library> -->
