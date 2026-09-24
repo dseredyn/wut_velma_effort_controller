@@ -28,6 +28,8 @@
   <depend>kdl_parser</depend>
   <depend>orocos_kdl</depend>
   <depend>urdf</depend>
+  <depend>srdfdom</depend>
+  <depend>moveit_core</depend>
 
   <depend>pinocchio</depend>
 

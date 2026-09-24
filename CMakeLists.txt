@@ -26,6 +26,8 @@ find_package(Eigen3 REQUIRED)
 find_package(kdl_parser REQUIRED)
 find_package(orocos_kdl REQUIRED)
 find_package(urdf REQUIRED)
+find_package(srdfdom REQUIRED)
+find_package(moveit_core REQUIRED)
 find_package(pinocchio REQUIRED)
 find_package(tf2_ros REQUIRED)
 
@@ -37,13 +39,6 @@ add_library(${PROJECT_NAME} SHARED
   src/joint_impedance.cpp
   src/wut_velma_model.cpp
   src/self_collision_detector.cpp
-
-  src/cart_torque_controller.cpp
-  src/cartesian_impedance.cpp
-
-  src/cartesian_trajectory_generator.cpp
-
-  src/test_chainable_controller.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} Eigen3::Eigen pinocchio::pinocchio)
@@ -68,6 +63,8 @@ ament_target_dependencies(${PROJECT_NAME}
   kdl_parser
   orocos_kdl
   urdf
+  srdfdom
+  moveit_core
   tf2_ros
   geometry_msgs
 )

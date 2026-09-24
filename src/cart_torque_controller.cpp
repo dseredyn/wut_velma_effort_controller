@@ -313,6 +313,7 @@ CartTorqueController::on_configure(const rclcpp_lifecycle::State &)
 #endif
 
     std::string urdf_xml;
+    std::string srdf_xml;
 
     try {
         urdf_xml = get_urdf_from_topic_detached("/robot_description", std::chrono::milliseconds(3000));
@@ -322,7 +323,17 @@ CartTorqueController::on_configure(const rclcpp_lifecycle::State &)
         RCLCPP_ERROR(get_node()->get_logger(), "Failed to get robot_description: %s", e.what());
         return controller_interface::CallbackReturn::ERROR;
     }
+    // else
 
+    // Read the SRDF
+    try {
+        srdf_xml = get_urdf_from_topic_detached("/robot_description_semantic", std::chrono::milliseconds(20000));
+        RCLCPP_INFO(get_node()->get_logger(), "Got robot_description_semantic (%zu bytes).", srdf_xml.size());
+    } catch (const std::exception& e) {
+        RCLCPP_ERROR(get_node()->get_logger(), "Failed to get robot_description_semantic: %s", e.what());
+        return controller_interface::CallbackReturn::ERROR;
+    }
+    // else
 
     joints_ = node->get_parameter("joints").as_string_array();
 
@@ -363,7 +374,53 @@ CartTorqueController::on_configure(const rclcpp_lifecycle::State &)
         "left_arm_5_link",
         "left_arm_6_link",
         "left_arm_7_link"};
-    velma_model_.emplace(urdf_xml, joints_, fk_link_names);
+
+    // Read collision model-specific parameters
+    // Read collision_distance
+    rclcpp::Parameter param_collision_distance;
+    if (!node->get_parameter("collision_distance", param_collision_distance)) {
+        RCLCPP_ERROR(node->get_logger(), "Parameter \"collision_distance\" is not set");
+        return controller_interface::CallbackReturn::ERROR;
+    }
+    // else
+    double collision_distance_ = param_collision_distance.as_double();
+
+    if (collision_distance_ < 0) {
+        RCLCPP_ERROR_STREAM(node->get_logger(), "Parameter \"collision_distance\" has wrong value: " << collision_distance_);
+        return controller_interface::CallbackReturn::ERROR;
+    }
+
+    // Read collision model capsules and spheres
+    std::vector<std::string> collision_link_names = node->get_parameter("collision_model_links").as_string_array();
+
+    std::vector<CollisionGeomSharedPtr> collision_link_geoms;
+    for (size_t i = 0; i < collision_link_names.size(); ++i) {
+        auto param_name = "collision_model_col" + std::to_string(i);
+        std::vector<double> gp = 
+                        node->declare_parameter<std::vector<double>>(
+                            param_name,
+                            std::vector<double>());
+        CollisionGeomSharedPtr geom;
+        if (gp.size() != 4 && gp.size() != 8) {
+            RCLCPP_ERROR_STREAM(node->get_logger(), "Wrong size for parameter \"" << param_name << "\": " << gp.size());
+            return controller_interface::CallbackReturn::ERROR;
+        }
+        if (gp.size() == 4) {
+            RCLCPP_INFO_STREAM(node->get_logger(), "Collision geometry for link \""
+                        << collision_link_names[i] << "\": sphere r=" << gp[0]);
+            geom.reset( new CollisionSphere(gp[0], Eigen::Vector3d(gp[1], gp[2], gp[3])) );
+        }
+        
+        if (gp.size() == 8) {
+            RCLCPP_INFO_STREAM(node->get_logger(), "Collision geometry for link \""
+                        << collision_link_names[i] << "\": capsule l= " << gp[0] << ", r=" << gp[1]);
+            geom.reset( new CollisionCapsule(gp[0], gp[1], Eigen::Vector3d(gp[2], gp[3], gp[4]),
+                                                            Eigen::Vector3d(gp[5], gp[6], gp[7])) );
+        }
+        collision_link_geoms.push_back( geom );
+    }
+
+    velma_model_.emplace(urdf_xml, joints_, fk_link_names, srdf_xml, collision_distance_, collision_link_names, collision_link_geoms);
 
     std::cout << "Created WutVelmaModel" << std::endl;
 
