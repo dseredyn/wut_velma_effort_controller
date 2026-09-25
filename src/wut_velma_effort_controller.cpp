@@ -263,7 +263,7 @@ WutVelmaEffortController::on_configure(const rclcpp_lifecycle::State &)
                             param_name,
                             std::vector<double>());
         CollisionGeomSharedPtr geom;
-        if (gp.size() != 4 && gp.size() != 8) {
+        if (gp.size() != 4 && gp.size() != 7) {
             RCLCPP_ERROR_STREAM(node->get_logger(), "Wrong size for parameter \"" << param_name << "\": " << gp.size());
             return controller_interface::CallbackReturn::ERROR;
         }
@@ -273,11 +273,11 @@ WutVelmaEffortController::on_configure(const rclcpp_lifecycle::State &)
             geom.reset( new CollisionSphere(gp[0], Eigen::Vector3d(gp[1], gp[2], gp[3])) );
         }
         
-        if (gp.size() == 8) {
+        if (gp.size() == 7) {
             RCLCPP_INFO_STREAM(node->get_logger(), "Collision geometry for link \""
                         << collision_link_names[i] << "\": capsule l= " << gp[0] << ", r=" << gp[1]);
-            geom.reset( new CollisionCapsule(gp[0], gp[1], Eigen::Vector3d(gp[2], gp[3], gp[4]),
-                                                            Eigen::Vector3d(gp[5], gp[6], gp[7])) );
+            geom.reset( new CollisionCapsule(gp[0], Eigen::Vector3d(gp[1], gp[2], gp[3]),
+                                                            Eigen::Vector3d(gp[4], gp[5], gp[6])) );
         }
         collision_link_geoms.push_back( geom );
     }
@@ -387,15 +387,22 @@ controller_interface::CallbackReturn WutVelmaEffortController::on_activate(
 controller_interface::CallbackReturn WutVelmaEffortController::on_deactivate(
   const rclcpp_lifecycle::State &)
 {
-  for (auto & cmd : command_interfaces_)
-  {
-    cmd.set_value(0.0);
-  }
+    bool set_val_error = false;
+    for (auto & cmd : command_interfaces_)
+    {
+        if (!cmd.set_value(0.0)) {
+            set_val_error = true;
+        }
+    }
 
-  marker_timer_->cancel();
-  marker_pub_->on_deactivate();
+    marker_timer_->cancel();
+    marker_pub_->on_deactivate();
 
-  return controller_interface::CallbackReturn::SUCCESS;
+    if (set_val_error) {
+        return controller_interface::CallbackReturn::FAILURE;
+    }
+    // else
+    return controller_interface::CallbackReturn::SUCCESS;
 }
 
 bool WutVelmaEffortController::on_set_chained_mode(bool chained_mode)
@@ -860,8 +867,13 @@ void WutVelmaEffortController::publish_markers()
         m.id = i*3+2;
         m.scale.z = snapshot->capsules[i].length;
         auto d = snapshot->capsules[i].p1_g - snapshot->capsules[i].p0_g;
-        const Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(
-                                                    Eigen::Vector3d::UnitZ(), d);
+
+        const double yaw = std::atan2(d.y(), d.x());
+        const double tilt = std::atan2(std::hypot(d.x(), d.y()), d.z());
+        const Eigen::Quaterniond q =
+            Eigen::AngleAxisd(yaw,  Eigen::Vector3d::UnitZ()) *
+            Eigen::AngleAxisd(tilt, Eigen::Vector3d::UnitY());
+
         auto center = (snapshot->capsules[i].p0_g + snapshot->capsules[i].p1_g) / 2;
         m.pose.position.x = center.x();
         m.pose.position.y = center.y();

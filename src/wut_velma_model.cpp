@@ -74,10 +74,10 @@ CollisionCapsule::CollisionCapsule()
 : CollisionGeom(CollisionGeom::CAPSULE)
 {}
 
-CollisionCapsule::CollisionCapsule(double length, double radius, Eigen::Vector3d p0, Eigen::Vector3d p1)
+CollisionCapsule::CollisionCapsule(double radius, Eigen::Vector3d p0, Eigen::Vector3d p1)
 : CollisionGeom(CollisionGeom::CAPSULE)
-, length(length)
 , radius(radius)
+, length((p0-p1).norm())
 , p0(p0)
 , p1(p1)
 {}

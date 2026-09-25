@@ -56,11 +56,11 @@ typedef std::shared_ptr<CollisionSphere> CollisionSphereSharedPtr;
 class CollisionCapsule : public CollisionGeom {
 public:
     CollisionCapsule();
-    CollisionCapsule(double length, double radius, Eigen::Vector3d p0, Eigen::Vector3d p1);
+    CollisionCapsule(double radius, Eigen::Vector3d p0, Eigen::Vector3d p1);
     virtual void updateReferenceFrame(const Eigen::Affine3d& f) override;
 
-    double length;
     double radius;
+    double length;
     Eigen::Vector3d p0;
     Eigen::Vector3d p1;
 
