@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "geometry_msgs/msg/point.hpp"
+#include "std_msgs/msg/color_rgba.hpp"
 #include "wut_velma_effort_controller/wut_velma_model.hpp"
 
 namespace wut_velma_effort_controller
@@ -105,32 +106,6 @@ WutVelmaEffortController::state_interface_configuration() const
 }
 
 
-
-// controller_interface::InterfaceConfiguration
-// WutVelmaEffortController::command_interface_configuration() const
-// {
-//     controller_interface::InterfaceConfiguration cfg;
-//     cfg.type = controller_interface::interface_configuration_type::INDIVIDUAL;
-//     cfg.names.reserve(joints_.size());
-//     for (const auto & j : joints_) {
-//         cfg.names.push_back(j + "/" + hardware_interface::HW_IF_EFFORT);
-//     }
-//     return cfg;
-// }
-
-// controller_interface::InterfaceConfiguration
-// WutVelmaEffortController::state_interface_configuration() const
-// {
-//     controller_interface::InterfaceConfiguration cfg;
-//     cfg.type = controller_interface::interface_configuration_type::INDIVIDUAL;
-//     cfg.names.reserve(joints_.size() * 2);
-//     for (const auto & j : joints_) {
-//         cfg.names.push_back(j + "/" + hardware_interface::HW_IF_POSITION);
-//         cfg.names.push_back(j + "/" + hardware_interface::HW_IF_VELOCITY);
-//     }
-//     return cfg;
-// }
-
 std::vector<hardware_interface::CommandInterface>
 WutVelmaEffortController::on_export_reference_interfaces()
 {
@@ -147,7 +122,6 @@ WutVelmaEffortController::on_export_reference_interfaces()
 
   return interfaces;
 }
-
 
 
 controller_interface::CallbackReturn
@@ -381,6 +355,8 @@ controller_interface::CallbackReturn WutVelmaEffortController::on_activate(
   marker_pub_->on_activate();
   marker_timer_->reset();
 
+  first_update_ = true;
+
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -422,143 +398,6 @@ WutVelmaEffortController::update_reference_from_subscribers(
     return controller_interface::return_type::OK;
 }
 
-// controller_interface::CallbackReturn
-// WutVelmaEffortController::on_activate(const rclcpp_lifecycle::State &)
-// {
-//     auto node = get_node();
-
-//     if (joints_.empty()) {
-//         RCLCPP_ERROR(node->get_logger(), "on_activate: joints_ is empty.");
-//         return controller_interface::CallbackReturn::ERROR;
-//     }
-
-//     // We expect 1 command interface (effort) for each joint
-//     if (command_interfaces_.size() != joints_.size()) {
-//         RCLCPP_ERROR(
-//         node->get_logger(),
-//         "on_activate: command_interfaces size mismatch. Expected %zu, got %zu",
-//         joints_.size(), command_interfaces_.size());
-//         return controller_interface::CallbackReturn::ERROR;
-//     }
-
-//     // We expect 2 state interfaces (position, velocity) for each joint
-//     const size_t expected_state = joints_.size() * 2;
-//     if (state_interfaces_.size() < expected_state) {
-//         RCLCPP_ERROR(
-//         node->get_logger(),
-//         "on_activate: state_interfaces size mismatch. Expected at least %zu, got %zu",
-//         expected_state, state_interfaces_.size());
-//         return controller_interface::CallbackReturn::ERROR;
-//     }
-
-//     // 1) Set q_des = current position (hold current pose)
-//     std::vector<double> q0(joints_.size(), 0.0);
-
-//     for (size_t i = 0; i < joints_.size(); ++i) {
-//         // indices: [q0, dq0, q1, dq1, ...]
-//         const size_t q_idx = 2 * i + 0;
-
-//         auto q_opt = state_interfaces_[q_idx].get_optional();
-//         if (!q_opt) {
-//             RCLCPP_WARN(
-//                 node->get_logger(),
-//                 "on_activate: missing position state for joint '%s' (idx=%zu). Using 0.0",
-//                 joints_[i].c_str(), i);
-//             q0[i] = 0.0;
-//         } else {
-//             q0[i] = *q_opt;
-//         }
-//     }
-
-//     q_des_buf_.writeFromNonRT(q0);
-
-//     // 2) Reset current effort commands
-//     for (auto & ci : command_interfaces_) {
-//         if (!ci.set_value(0.0)) {
-//         return controller_interface::CallbackReturn::ERROR;
-//         }
-//     }
-
-//     RCLCPP_INFO(node->get_logger(), "Controller activated: q_des initialized to current joint positions.");
-//     return controller_interface::CallbackReturn::SUCCESS;
-// }
-
-// controller_interface::return_type
-// WutVelmaEffortController::update(const rclcpp::Time &, const rclcpp::Duration &)
-// {
-//     const auto * q_des = q_des_buf_.readFromRT();
-//     if (!q_des || q_des->size() != joints_.size()) {
-//         return controller_interface::return_type::ERROR;
-//     }
-
-//     if (!velma_model_) {
-//         return controller_interface::return_type::ERROR;
-//     }
-
-//     VVector joint_position;
-//     VVector joint_position_cmd;
-//     VVector stiffness;
-//     VVector joint_velocity;
-//     VVector nullspace_torque_cmd;
-//     VMatrix mass_matrix;
-//     VVector out_joint_torque_command;
-
-//     for (size_t i = 0; i < joints_.size(); ++i) {
-//         auto q_opt = state_interfaces_[2*i + 0].get_optional();
-//         auto dq_opt = state_interfaces_[2*i + 1].get_optional();
-
-//         if (q_opt && dq_opt) {
-//             joint_position[i] = *q_opt;
-//             joint_velocity[i] = *dq_opt;
-//         }
-//         else {
-//             return controller_interface::return_type::ERROR;
-//         }
-
-//         joint_position_cmd[i] = (*q_des)[i];
-//     }
-
-//     velma_model_->setJointPosition(joint_position);
-//     velma_model_->calculateMassMatrix(mass_matrix);
-//     // mass_matrix.setConstant(1.0);
-
-//     // TODO: read 'stiffness'
-//     stiffness.setConstant(50.0);
-
-//     nullspace_torque_cmd.setZero();
-//     out_joint_torque_command.setZero();
-
-//     if (!jimp_.calculate(joint_position, joint_position_cmd, stiffness, joint_velocity, nullspace_torque_cmd, mass_matrix, out_joint_torque_command)) {
-//         std::cout << "WutVelmaEffortController: could not calculate joint impedance" << std::endl;
-//         return controller_interface::return_type::ERROR;
-//     }
-
-//     // state_interfaces_ holds [q0, dq0, q1, dq1, ...] as in the state_interface_configuration
-//     for (size_t i = 0; i < joints_.size(); ++i) {
-//         if (!command_interfaces_[i].set_value(out_joint_torque_command[i])) {
-//             return controller_interface::return_type::ERROR;
-//         }
-
-//         // auto q_opt = state_interfaces_[2*i + 0].get_optional();
-//         // auto dq_opt = state_interfaces_[2*i + 1].get_optional();
-
-//         // if (q_opt && dq_opt) {
-//         //     const double q  = *q_opt;
-//         //     const double dq = *dq_opt;
-
-//         //     const double e  = (*q_des)[i] - q;
-//         //     const double de = 0.0 - dq;
-
-//         //     const double tau = kp_ * e + kd_ * de;  // PD -> effort
-
-//         //     if (!command_interfaces_[i].set_value(tau)) {
-//         //         return controller_interface::return_type::ERROR;
-//         //     }
-//         // }
-//     }
-
-//     return controller_interface::return_type::OK;
-// }
 
 controller_interface::return_type
 WutVelmaEffortController::update_and_write_commands(
@@ -582,51 +421,6 @@ WutVelmaEffortController::update_and_write_commands(
     VMatrix mass_matrix;
     VVector out_joint_torque_command;
 
-
-
-//   for (size_t i = 0; i < joints_.size(); ++i)
-//   {
-//     const double q_ref =
-//       reference_interfaces_[ref_index(i, 0)];
-//     const double dq_ref =
-//       reference_interfaces_[ref_index(i, 1)];
-//     const double ddq_ref =
-//       reference_interfaces_[ref_index(i, 2)];
-
-//     if (!std::isfinite(q_ref) ||
-//         !std::isfinite(dq_ref) ||
-//         !std::isfinite(ddq_ref))
-//     {
-//       // Nie pisz śmieci do effort, dopóki nie przyszła trajektoria.
-//       command_interfaces_[i].set_value(0.0);
-//       continue;
-//     }
-
-//     // state_interfaces_ są w kolejności:
-//     // joint0/position
-//     // joint0/velocity
-//     // joint1/position
-//     // joint1/velocity
-//     // ...
-//     const double q = state_interfaces_[2 * i + 0].get_value();
-//     const double dq = state_interfaces_[2 * i + 1].get_value();
-
-//     const double e = q_ref - q;
-//     const double de = dq_ref - dq;
-
-//     // Minimalny wariant:
-//     // tau = feedforward acceleration + PD
-//     //
-//     // Docelowo tutaj podstawiasz:
-//     // tau = M(q) * ddq_ref + C(q,dq) * dq_ref + g(q)
-//     //       + Kp * (q_ref - q) + Kd * (dq_ref - dq)
-//     //
-//     // Dla pojedynczego niezależnego złącza można zacząć od:
-//     const double tau = ddq_ref + kp_[i] * e + kd_[i] * de;
-
-//     command_interfaces_[i].set_value(tau);
-//   }
-
     bool received_command = true;
 
     // Read the commands from high-level controller.
@@ -641,8 +435,6 @@ WutVelmaEffortController::update_and_write_commands(
         else {
             return controller_interface::return_type::ERROR;
         }
-
-        // joint_position_cmd[i] = (*q_des)[i];
 
         const double q_ref =
         reference_interfaces_[ref_index(i, 0)];
@@ -693,7 +485,25 @@ WutVelmaEffortController::update_and_write_commands(
             }
         }
 
-        if (is_in_self_collision) {
+        const double q_diff_max = 5.0/180.0* 3.14159265359;
+        bool too_far = false;
+        if (!first_update_) {
+            for (size_t i = 0; i < joints_.size(); ++i) {
+                if (abs(joint_position_cmd_[i] - joint_position_cmd_new[i]) > q_diff_max) {
+                    too_far = true;
+                    // RCLCPP_INFO_STREAM(
+                    //     get_node()->get_logger(),
+                    //     "The new commanded q[" << i << "]: " << joint_position_cmd_new[i] << " is too far from: " << joint_position_cmd_[i]);
+                    break;
+                }
+            }
+        }
+        first_update_ = false;
+
+        // Ignore the new command if:
+        // - it is in self-collision
+        // - or it is too far away
+        if (is_in_self_collision || too_far) {
             // Keep the old commanded configuration
         }
         else {
@@ -702,7 +512,17 @@ WutVelmaEffortController::update_and_write_commands(
             col_data_buf_idx_ = (col_data_buf_idx_+1) % col_data_buf_.size();
         }
 
-        if (!processDebugVisualization(current_col_data_buf)) {
+        VisualizationSnapshot::CommandStatus command_status;
+        if (is_in_self_collision) {
+            command_status = VisualizationSnapshot::CMD_COLLISION;
+        }
+        else if (too_far) {
+            command_status = VisualizationSnapshot::CMD_TOO_FAR;
+        }
+        else {
+            command_status = VisualizationSnapshot::CMD_OK;
+        }
+        if (!processDebugVisualization(current_col_data_buf, command_status)) {
             return controller_interface::return_type::ERROR;
         }
     
@@ -714,7 +534,7 @@ WutVelmaEffortController::update_and_write_commands(
         // mass_matrix.setConstant(1.0);
 
         // TODO: read 'stiffness'
-        stiffness.setConstant(50.0);
+        stiffness.setConstant(150.0);
 
         nullspace_torque_cmd.setZero();
         out_joint_torque_command.setZero();
@@ -751,9 +571,11 @@ geometry_msgs::msg::Point cPoint(const Eigen::Vector3d& p) {
 
 
 bool WutVelmaEffortController::processDebugVisualization(
-                                                    const std::vector<CollisionData>& coll_data) {
+                                const std::vector<CollisionData>& coll_data,
+                                VisualizationSnapshot::CommandStatus command_status) {
     // Visualization for debug
     VisualizationSnapshot snapshot;
+    snapshot.command_status = command_status;
     snapshot.collisions_count = 0;
     for (size_t i = 0; i < coll_data.size(); ++i) {
         if (coll_data[i].distance < collision_distance_) {
@@ -791,6 +613,15 @@ bool WutVelmaEffortController::processDebugVisualization(
     return true;
 }
 
+std_msgs::msg::ColorRGBA cColorRGBA(float r, float g, float b, float a) {
+    std_msgs::msg::ColorRGBA result;
+    result.r = r;
+    result.g = g;
+    result.b = b;
+    result.a = a;
+    return result;
+}
+
 void WutVelmaEffortController::publish_markers()
 {
     const auto snapshot = visualization_box_.try_get();
@@ -798,8 +629,17 @@ void WutVelmaEffortController::publish_markers()
     if (!snapshot)
         return;
 
+    std_msgs::msg::ColorRGBA color;
+    if (snapshot->command_status == VisualizationSnapshot::CMD_OK) {
+        color = cColorRGBA(0, 1, 0, 0.5);
+    }
+    else if (snapshot->command_status == VisualizationSnapshot::CMD_COLLISION) {
+        color = cColorRGBA(1, 0, 0, 0.5);
+    }
+    else if (snapshot->command_status == VisualizationSnapshot::CMD_TOO_FAR) {
+        color = cColorRGBA(1, 0.6, 0, 0.5);
+    }
     visualization_msgs::msg::MarkerArray msg;
-
     for (size_t i = 0; i < snapshot->collisions.size(); ++i) {
         visualization_msgs::msg::Marker m;
         m.type = visualization_msgs::msg::Marker::ARROW;
@@ -812,10 +652,7 @@ void WutVelmaEffortController::publish_markers()
             m.points.push_back(cPoint(snapshot->collisions[i].p1));
             m.scale.x = 0.01;
             m.scale.y = 0.01;
-            m.color.r = 1.0;
-            m.color.g = 0.0;
-            m.color.b = 0.0;
-            m.color.a = 1.0;
+            m.color = cColorRGBA(1, 0, 0, 1);
         }
         else {
             m.action = visualization_msgs::msg::Marker::DELETE;
@@ -830,10 +667,7 @@ void WutVelmaEffortController::publish_markers()
         m.ns = "spheres";
         m.id = i;
         m.action = visualization_msgs::msg::Marker::ADD;
-        m.color.r = 0.0;
-        m.color.g = 1.0;
-        m.color.b = 0.0;
-        m.color.a = 0.5;
+        m.color = color;
         m.scale.x = m.scale.y = m.scale.z = snapshot->spheres[i].radius * 2;
         m.pose.position.x = snapshot->spheres[i].p_g.x();
         m.pose.position.y = snapshot->spheres[i].p_g.y();
@@ -848,10 +682,7 @@ void WutVelmaEffortController::publish_markers()
         m.ns = "capsules";
         m.action = visualization_msgs::msg::Marker::ADD;
         m.scale.x = m.scale.y = m.scale.z = snapshot->capsules[i].radius * 2;
-        m.color.r = 0.0;
-        m.color.g = 1.0;
-        m.color.b = 0.0;
-        m.color.a = 0.5;
+        m.color = color;
         m.id = i*3;
         m.pose.position.x = snapshot->capsules[i].p0_g.x();
         m.pose.position.y = snapshot->capsules[i].p0_g.y();

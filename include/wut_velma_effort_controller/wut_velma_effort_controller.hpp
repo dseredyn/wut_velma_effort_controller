@@ -26,6 +26,8 @@ namespace wut_velma_effort_controller
 
 class VisualizationSnapshot {
 public:
+    enum CommandStatus {CMD_OK, CMD_COLLISION, CMD_TOO_FAR};
+
     VisualizationSnapshot();
     std::array<CollisionData, 100> collisions;
     size_t collisions_count;
@@ -34,6 +36,8 @@ public:
     size_t spheres_count;
     std::array<CollisionCapsule, 35> capsules;
     size_t capsules_count;
+
+    CommandStatus command_status;
 };
 
 class WutVelmaEffortController : public controller_interface::ChainableControllerInterface
@@ -70,7 +74,8 @@ protected:
         const rclcpp::Time & time,
         const rclcpp::Duration & period) override;
 
-    bool processDebugVisualization(const std::vector<CollisionData>& coll_data);
+    bool processDebugVisualization(const std::vector<CollisionData>& coll_data,
+                                            VisualizationSnapshot::CommandStatus command_status);
 
     // controller_interface::CallbackReturn on_init() override;
 
@@ -103,9 +108,6 @@ private:
 
     std::vector<std::string> joints_;
 
-    // realtime_tools::RealtimeBuffer<std::vector<double>> q_des_buf_;
-    // rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr sub_;
-
     JointImpedance jimp_;
     std::optional<WutVelmaModel> velma_model_;
 
@@ -121,6 +123,8 @@ private:
     double collision_distance_;
     std::vector<std::vector<CollisionData>> col_data_buf_;
     size_t col_data_buf_idx_;
+
+    bool first_update_;
 };
 
 }  // namespace wut_velma_effort_controller
